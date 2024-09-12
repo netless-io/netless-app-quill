@@ -1,0 +1,15 @@
+{
+  "include": ["src"],
+  "extends": "@hyrious/configs/tsconfig.casual.json",
+  // "exclude": ["node_modules/*", "@netless/fastboard"],
+  // "respectExternalTsConfig": false,
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "declaration": true,
+    "declarationDir": "dist/types",
+    "noEmit": false,
+  }
+}

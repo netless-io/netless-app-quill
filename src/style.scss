@@ -1,0 +1,33 @@
+@import "quill/dist/quill.snow.css";
+@import "katex/dist/katex.min.css";
+@import "@highlightjs/cdn-assets/styles/github.min.css";
+
+.netless-app-quill-container {
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  color: #000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// the default H1...H6 font-size was set to 2em...0.67em, see: https://github.com/quilljs/quill/blob/e33f352b9ede51759cb3d616835d1e1e80694251/assets/base.styl#L119
+// and then the parent container .ql-container default font-size is 13px,
+// that resulted in the final rendering of H1 at only 26px.
+// So, we can set the font-size of parent element to 16px, making H1 32px.
+.netless-app-quill-editor {
+  font-size: 16px;
+}
+
+.netless-app-quill-container {
+  flex: 1;
+}
+
+.ql-container.ql-snow {
+  border: 0;
+}
+.ql-toolbar.ql-snow {
+  border: 0;
+  border-bottom: 1px solid #eeeef7;
+}
