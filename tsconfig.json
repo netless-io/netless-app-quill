@@ -1,15 +1,22 @@
 {
   "include": ["src"],
-  "extends": "@hyrious/configs/tsconfig.casual.json",
-  // "exclude": ["node_modules/*", "@netless/fastboard"],
-  // "respectExternalTsConfig": false,
   "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "Preserve",
+    "skipLibCheck": true,
+    "noEmit": false,
+    "verbatimModuleSyntax": true,
+    "noImplicitAny": false,
+    "strictPropertyInitialization": false,
+    "useUnknownInCatchVariables": false,
+    "noImplicitOverride": true,
+    "useDefineForClassFields": false,
+    "moduleDetection": "force",
     "types": ["vite/client"],
     "rootDir": "src",
     "outDir": "dist",
-    "strict": true,
     "declaration": true,
     "declarationDir": "dist/types",
-    "noEmit": false,
   }
 }

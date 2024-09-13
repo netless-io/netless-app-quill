@@ -1,7 +1,7 @@
 {
   "name": "@netless/app-quill",
   "type": "module",
-  "version": "1.0.0-fb.2",
+  "version": "0.0.1-fb.1",
   "description": "netless-app-quill",
   "author": "hyrious <hyrious@outlook.com>",
   "license": "MIT",
@@ -34,9 +34,8 @@
   },
   "devDependencies": {
     "@highlightjs/cdn-assets": "^11.10.0",
-    "@hyrious/configs": "^0.1.3",
-    "@hyrious/dts": "^0.2.9",
     "@hyrious/esbuild-dev": "^0.10.11",
+    "@netless/app-quill": "1.0.0-fb.2",
     "@netless/fastboard": "^0.3.16",
     "@types/katex": "^0.16.7",
     "@wopjs/disposable": "^0.1.8",
