@@ -33,9 +33,17 @@
     "@netless/fastboard": "^0.3.16"
   },
   "devDependencies": {
+    "@babel/cli": "^7.25.7",
+    "@babel/core": "^7.25.8",
+    "@babel/preset-env": "^7.25.8",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@rollup/plugin-typescript": "^12.1.1",
+    "core-js": "^3.38.1",
     "@highlightjs/cdn-assets": "^11.10.0",
     "@hyrious/esbuild-dev": "^0.10.11",
-    "@netless/app-quill": "1.0.0-fb.2",
+    "@netless/app-quill": "0.0.1-fb.2",
     "@netless/fastboard": "^0.3.16",
     "@types/katex": "^0.16.7",
     "@wopjs/disposable": "^0.1.8",
@@ -48,5 +56,6 @@
     "value-enhancer": "^3.1.5",
     "vite": "^5.4.3",
     "y-protocols": "^1.0.6"
-  }
+  },
+  "browserslist": "> 0.05%, not dead"
 }

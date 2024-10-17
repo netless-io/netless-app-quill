@@ -3,7 +3,9 @@ import path from 'node:path'
 import * as rollup from 'rollup'
 import * as esbuild from 'esbuild'
 import * as SASS from 'sass'
+import { babel } from '@rollup/plugin-babel';
 import { version, dependencies } from './package.json'
+import {nodeResolve} from '@rollup/plugin-node-resolve';
 
 const sass = (): esbuild.Plugin => ({
   name: 'inline-sass',
@@ -76,14 +78,52 @@ await Promise.all([
 
 await bundle.close()
 
-await esbuild.build({
-  entryPoints: ['src/index.ts'],
-  bundle: true,
-  target: ['es2017'],
-  plugins: [sass()],
-  logLevel: 'info',
-  minify: true,
-  outfile: 'dist/index.global.js',
-  legalComments: 'none',
-  globalName: 'NetlessAppQuill'
-}).catch(() => process.exit(1))
+let bundle_iife = await rollup.rollup({
+  input: 'src/index.ts',
+  // external: Object.keys(dependencies),
+  plugins: [
+    {
+    name: 'esbuild',
+    async load(id) {
+      const { outputFiles } = await esbuild.build({
+        entryPoints: [id],
+        bundle: true,
+        format: 'esm',
+        outfile: id.replace(/\.ts$/, '.js'),
+        sourcemap: true,
+        write: false,
+        minify: true,
+        target: ['es2015'],
+        plugins: [sass()],
+        define: {
+          __VERSION__: JSON.stringify(version)
+        },
+        legalComments: 'none',
+        external: Object.keys(dependencies)
+      })
+      let code: any, map: any
+      for (const { path, text } of outputFiles) {
+        if (path.endsWith('.map')) map = text;
+        else code = text;
+      }
+      return { code, map }
+    }
+    },
+    nodeResolve(),
+    babel({ babelHelpers: 'bundled', extensions: ['.ts'] })
+  ]
+})
+
+await bundle_iife.write({ file: 'dist/index.global.js', format: 'iife', name: "NetlessAppQuill" })
+
+// await esbuild.build({
+//   entryPoints: ['src/index.ts'],
+//   bundle: true,
+//   target: ['es2015'],
+//   plugins: [sass()],
+//   logLevel: 'info',
+//   minify: true,
+//   outfile: 'dist/index.global.js',
+//   legalComments: 'none',
+//   globalName: 'NetlessAppQuill'
+// }).catch(() => process.exit(1))
