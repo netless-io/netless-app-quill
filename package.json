@@ -1,7 +1,6 @@
 {
   "name": "@netless/app-quill",
-  "type": "module",
-  "version": "0.0.1-fb.1",
+  "version": "0.0.1-fb.3",
   "description": "netless-app-quill",
   "author": "hyrious <hyrious@outlook.com>",
   "license": "MIT",
@@ -13,9 +12,13 @@
   ],
   "main": "dist/index.js",
   "types": "dist/types/index.d.ts",
+  "unpkg": "dist/index.global.js",
+  "jsdelivr": "dist/index.global.js",
   "files": [
     "src",
-    "dist"
+    "dist",
+    "build.ts",
+    "es5iife.sh"
   ],
   "scripts": {
     "dev": "vite --force",
@@ -43,7 +46,6 @@
     "core-js": "^3.38.1",
     "@highlightjs/cdn-assets": "^11.10.0",
     "@hyrious/esbuild-dev": "^0.10.11",
-    "@netless/app-quill": "0.0.1-fb.2",
     "@netless/fastboard": "^0.3.16",
     "@types/katex": "^0.16.7",
     "@wopjs/disposable": "^0.1.8",

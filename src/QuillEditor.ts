@@ -9,75 +9,96 @@ import QuillCursors from "quill-cursors";
 import { QuillBinding } from "y-quill";
 import { disposableStore } from "@wopjs/disposable";
 
-import { connect, createVector, type AppContext, type Vector } from "./yjs-binding";
+import { connect, createVector, type AnyDict, type AppContext, type Vector } from "./yjs-binding";
 import { add_class, color_to_string, element, next_tick } from "./internal";
 import styles from "./style.scss?inline";
+
+export type Storage = AppContext['storage']
 
 Quill.register("modules/cursors", QuillCursors);
 
 export class QuillEditor {
   static readonly styles = styles;
 
-  readonly editor: Quill;
-  readonly cursors: QuillCursors;
+  editor: Quill;
+  cursors: QuillCursors;
 
-  readonly yDoc: Y.Doc;
-  readonly yText: Y.Text;
-  readonly yBinding: QuillBinding;
+  yDoc: Y.Doc;
+  yText: Y.Text;
+  yBinding: QuillBinding;
 
-  readonly $container: HTMLDivElement;
-  readonly $editor: HTMLDivElement;
+  $container: HTMLDivElement;
+  $editor: HTMLDivElement;
 
-  readonly vector: Vector;
-  readonly dispose = disposableStore();
+  vector: Vector;
+  dispose = disposableStore();
+  isWritable:boolean;
+  cursors$$: Storage;
+  storage$$: Storage;
 
   constructor(readonly context: AppContext) {
-    this.vector = createVector(context, "quill");
-    this.dispose.add(this.vector.destroy.bind(this.vector));
-
-    this.yDoc = new Y.Doc();
-    this.yText = this.yDoc.getText("quill");
-    this.dispose.add(connect(this.vector, this.yDoc));
-
-    this.$container = add_class(element("div"), "container");
-    this.$editor = add_class(element("div"), "editor");
-    this.$container.appendChild(this.$editor);
-
-    context.getBox().mountStyles(QuillEditor.styles);
-    context.getBox().mountContent(this.$container);
-
-    this.editor = new Quill(this.$editor, {
-      modules: {
-        cursors: true,
-        toolbar: [
-          [{ header: [1, 2, false] }, "blockquote", "code-block"],
-          [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
-          ["bold", "italic", "underline", "strike"],
-          [{ color: [] }, { background: [] }, { align: [] }],
-          [{ script: "sub" }, { script: "super" }],
-          ["link", "formula"],
-          ["clean"],
-        ],
-        history: {
-          userOnly: true,
+    this.isWritable = context.getIsWritable();
+    this.init(context).then(() => {
+      this.vector = createVector(context, this.storage$$);
+      this.dispose.add(this.vector.destroy.bind(this.vector));
+  
+      this.yDoc = new Y.Doc();
+      this.yText = this.yDoc.getText("quill");
+      this.dispose.add(connect(this.vector, this.yDoc));
+  
+      this.$container = add_class(element("div"), "container");
+      this.$editor = add_class(element("div"), "editor");
+      this.$container.appendChild(this.$editor);
+  
+      context.getBox().mountStyles(QuillEditor.styles);
+      context.getBox().mountContent(this.$container);
+  
+      this.editor = new Quill(this.$editor, {
+        modules: {
+          cursors: true,
+          toolbar: [
+            [{ header: [1, 2, false] }, "blockquote", "code-block"],
+            [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
+            ["bold", "italic", "underline", "strike"],
+            [{ color: [] }, { background: [] }, { align: [] }],
+            [{ script: "sub" }, { script: "super" }],
+            ["link", "formula"],
+            ["clean"],
+          ],
+          history: {
+            userOnly: true,
+          },
         },
-      },
-      placeholder: "Hello, world!",
-      theme: "snow",
-      readOnly: !context.getIsWritable(),
+        placeholder: "Hello, world!",
+        theme: "snow",
+        readOnly: !this.isWritable,
+      });
+  
+      this.cursors = this.editor.getModule("cursors") as QuillCursors;
+  
+      this.yBinding = new QuillBinding(this.yText, this.editor);
+      setup_sync_handlers(this);
     });
+  }
 
-    this.cursors = this.editor.getModule("cursors") as QuillCursors;
-
-    this.yBinding = new QuillBinding(this.yText, this.editor);
-
-    setup_sync_handlers(this);
+  async init(context: AppContext){
+    const isCheck = !this.isWritable && !Object.keys(context.getAttributes()).length;
+    if (isCheck) {
+      await context.getRoom()?.setWritable(true);
+    }
+    this.storage$$ = context.createStorage<AnyDict>(`${this.context.appId}-storage`, {});
+    this.cursors$$ = context.createStorage<{ [uid: string]: UserCursor | null }>(`${this.context.appId}-cursors`, {});
+    if (isCheck) {
+      await context.getRoom()?.setWritable(false);
+    }
   }
 
   destroy() {
     this.yBinding.destroy();
     if (this.$container.parentElement) {
       this.$container.remove();
+      this.cursors$$.destroy();
+      this.storage$$.destroy();
     }
   }
 }
@@ -86,6 +107,7 @@ type UserCursor = { anchor: Y.RelativePosition; head: Y.RelativePosition };
 type UserInfo = { name?: string; color?: string };
 
 function setup_sync_handlers({
+  cursors$$,
   dispose,
   context,
   editor,
@@ -103,7 +125,7 @@ function setup_sync_handlers({
 
   // #region Cursors
 
-  const cursors$$ = context.createStorage<{ [uid: string]: UserCursor | null }>("cursors", {});
+  // const cursors$$ = context.createStorage<{ [uid: string]: UserCursor | null }>("cursors", {});
   const timers = new Map<string, number>();
 
   const refreshCursors = () => {

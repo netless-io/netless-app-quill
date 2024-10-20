@@ -23,10 +23,9 @@ export class Vector extends ObservableV2<VectorEvents> {
 
   clock = 1
   
-  constructor(readonly context: AppContext, namespace: string) {
+  constructor(readonly context: AppContext, storage: Storage) {
     super()
-    
-    this.storage = context.createStorage<AnyDict>(namespace, {})
+    this.storage = storage;
     this.clientId = context.getRoom()?.uid || Math.random().toString(36).slice(2, 8)
 
     this.dispose.add(this.storage.addStateChangedListener((diff) => {
@@ -77,8 +76,8 @@ export class Vector extends ObservableV2<VectorEvents> {
   }
 }
 
-export function createVector(context: AppContext, namespace: string) {
-  return new Vector(context, namespace);
+export function createVector(context: AppContext, storage: Storage) {
+  return new Vector(context, storage);
 }
 
 export interface ConnectOptions {
