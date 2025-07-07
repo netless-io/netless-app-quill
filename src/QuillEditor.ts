@@ -4,7 +4,7 @@ import type { RoomState } from "@netless/fastboard";
 
 import * as Y from "yjs";
 
-import Quill from "quill";
+import Quill, { type QuillOptions } from "quill";
 import QuillCursors from "quill-cursors";
 import { QuillBinding } from "y-quill";
 import { disposableStore } from "@wopjs/disposable";
@@ -12,6 +12,7 @@ import { disposableStore } from "@wopjs/disposable";
 import { connect, createVector, type AnyDict, type AppContext, type Vector } from "./yjs-binding";
 import { add_class, color_to_string, element, next_tick } from "./internal";
 import styles from "./style.scss?inline";
+import { DEFAULT_OPTIONS } from "./const";
 
 export type Storage = AppContext['storage']
 
@@ -35,6 +36,7 @@ export class QuillEditor {
   isWritable:boolean;
   cursors$$: Storage;
   storage$$: Storage;
+  options: QuillOptions;
 
   constructor(readonly context: AppContext) {
     this.isWritable = context.getIsWritable();
@@ -52,33 +54,130 @@ export class QuillEditor {
   
       context.getBox().mountStyles(QuillEditor.styles);
       context.getBox().mountContent(this.$container);
-  
-      this.editor = new Quill(this.$editor, {
-        modules: {
-          cursors: true,
-          toolbar: [
-            [{ header: [1, 2, false] }, "blockquote", "code-block"],
-            [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
-            ["bold", "italic", "underline", "strike"],
-            [{ color: [] }, { background: [] }, { align: [] }],
-            [{ script: "sub" }, { script: "super" }],
-            ["link", "formula"],
-            ["clean"],
-          ],
-          history: {
-            userOnly: true,
-          },
-        },
-        placeholder: "Hello, world!",
-        theme: "snow",
+
+      const options = context.getAppOptions().options || {};
+
+      this.options = {
+        ...DEFAULT_OPTIONS,
+        ...options,
         readOnly: !this.isWritable,
-      });
+        // 禁用 Quill 的默认粘贴处理
+        clipboard: {
+          matchVisual: false,
+        },
+      }
+      
+      const attributes = context.getAttributes();
+      if(attributes.placeholder){
+        this.options.placeholder = attributes.placeholder;
+      }
   
+      this.editor = new Quill(this.$editor, this.options);
+
+      // 使用 capture 阶段来确保我们的处理在 Quill 之前执行
+      this.editor.root.addEventListener('paste', async (e) => {
+        // 立即阻止默认行为
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+
+        const clipboardData = e.clipboardData || (window as any).clipboardData;
+        const html = clipboardData.getData('text/html') || clipboardData.getData('text/plain');
+      
+        const processedHTML = await this.handleBase64ImagesInHTML(html);
+
+        const range = this.editor.getSelection(true);
+        if (range) {
+          // 使用 clipboard.convert 转成 Delta
+          const delta = this.editor.clipboard.convert({ html: processedHTML });
+          // 先删空当前选区（如果有）
+          this.editor.deleteText(range.index, range.length);
+      
+          // 直接使用 dangerouslyPasteHTML 插入处理后的 HTML 内容
+          this.editor.clipboard.dangerouslyPasteHTML(range.index, processedHTML, 'user');
+      
+          // 计算正确的插入长度
+          let insertLength = 0;
+          if (delta.ops && delta.ops.length > 0) {
+            // 遍历所有操作来计算总长度
+            delta.ops.forEach(op => {
+              if (typeof op.insert === 'string') {
+                insertLength += op.insert.length;
+              } else if (typeof op.insert === 'object') {
+                // 对于图片、视频等嵌入内容，长度为 1
+                insertLength += 1;
+              }
+            });
+          }
+          
+          // 设置光标到插入末尾
+          this.editor.setSelection(range.index + insertLength, 0);
+        }
+        
+        return false; // 确保事件不会继续传播
+      }, true); // 使用 capture 阶段
       this.cursors = this.editor.getModule("cursors") as QuillCursors;
   
       this.yBinding = new QuillBinding(this.yText, this.editor);
       setup_sync_handlers(this);
     });
+  }
+
+  private async handleBase64ImagesInHTML(html: string): Promise<string> {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+  
+    // 收集所有需要处理的 base64 图
+    const uploadTasks: Promise<void>[] = [];
+
+    const uploadBase64Image = this.context.getAppOptions()?.uploadBase64Image;
+  
+    // 处理 <img src="data:image/...">
+    const imgElements = Array.from(div.querySelectorAll('img'));
+    
+    for (const img of imgElements) {
+      const src = img.getAttribute('src');
+      if (src && src.startsWith('data:image')) {
+        if (uploadBase64Image) {
+          const task = this.context.getAppOptions().uploadBase64Image(src).then((url) => {
+            img.setAttribute('src', url);
+          }).catch((err) => {
+            console.error('图片上传失败:', err);
+            img.remove();
+          });
+          uploadTasks.push(task);
+        } else {
+          console.warn('uploadBase64Image is not set, so the image will be removed');
+          img.remove();
+        }
+      }
+    }
+  
+    // 处理 style 中的 background-image: url(data:image/...)
+    const allElements = Array.from(div.querySelectorAll<HTMLElement>('*'));
+    for (const el of allElements) {
+      const bg = el.style.backgroundImage;
+      const match = bg && bg.match(/url\(["']?(data:image\/[^"')]+)["']?\)/);
+      if (match) {
+        if (uploadBase64Image) {
+          const base64 = match[1];
+          const task = this.context.getAppOptions().uploadBase64Image(base64).then((url) => {
+              el.style.backgroundImage = `url("${url}")`;
+            }).catch((err) => {
+            console.error('背景图上传失败:', err);
+            el.style.backgroundImage = '';
+          });
+          uploadTasks.push(task);
+        } else {
+          console.warn('uploadBase64Image is not set, so the backgroundImage will be removed');
+          el.style.backgroundImage = '';
+        }
+      }
+    }
+    await Promise.all(uploadTasks);
+    const result = div.innerHTML;
+    return result;
   }
 
   async init(context: AppContext){

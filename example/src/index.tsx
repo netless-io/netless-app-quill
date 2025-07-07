@@ -4,9 +4,8 @@ import './index.css';
 import '@netless/appliance-plugin/dist/style.css';
 import { WhiteWebSdk, DeviceType, DefaultHotKeys, HotKeyEvent, KeyboardKind} from "white-web-sdk";
 import { WindowManager } from "@netless/window-manager";
-import { ApplianceMultiPlugin } from '@netless/appliance-plugin';
-import fullWorkerString from '@netless/appliance-plugin/dist/fullWorker.js?raw';
-import subWorkerString from '@netless/appliance-plugin/dist/subWorker.js?raw';
+import { NetlessAppQuill } from "../../src/app-quill";
+import { uploadImage } from './uploadImage';
 
 const elm = document.getElementById('whiteboard') as HTMLDivElement;
 const appIdentifier = '123456789/987654321';
@@ -43,22 +42,16 @@ const whiteWebSdk = new WhiteWebSdk({
     appIdentifier,
     useMobXState: true,
     deviceType: DeviceType.Surface,
-    // apiHosts: [
-    //     "api-cn-hz.netless.group",
-    // ],
 })
 const uid = sessionStorage.getItem('uid') || 'uid-' + Math.floor(Math.random() * 10000);
 const room = await whiteWebSdk.joinRoom({
-    uuid:"ec61e0108d4211ef83863d0682a6c9bd",
-    roomToken:"NETLESSROOM_YWs9VWtNUk92M1JIN2I2Z284dCZleHBpcmVBdD0xNzI5MzM2ODA0Njg2Jm5vbmNlPWVjN2ViNmUwLThkNDItMTFlZi05NmE5LWFiMzg4NjE4OThhZiZyb2xlPTEmc2lnPTcwODZkNWRkOWQ2ZGFkZGE1ZDg3NTA5MjRmZGZiMDAxYmNmNWZkMjA1ODBlMmY5OWMwZmNjODdiMTBmNTE0MzMmdXVpZD1lYzYxZTAxMDhkNDIxMWVmODM4NjNkMDY4MmE2YzliZA",
+    uuid:"cbc67f00169f11f0826bfd782d7d3846",
+    roomToken:"NETLESSROOM_YWs9VWtNUk92M1JIN2I2Z284dCZleHBpcmVBdD0xNzUxOTU0OTk4NDgxJm5vbmNlPTAyOGZhNDEwLTVhZjktMTFmMC05NmE5LWFiMzg4NjE4OThhZiZyb2xlPTEmc2lnPTcyNDI1OTUxZWZiMzgwZDU4MDNiNjYyM2EyOGMzNGNiNWM5NDNhMjczZjI1OThhM2NlZjJkNTgyZDZiNTVkYmYmdXVpZD1jYmM2N2YwMDE2OWYxMWYwODI2YmZkNzgyZDdkMzg0Ng",
     uid,
     region: "cn-hz",
     isWritable: true,
     floatBar: true,
     userPayload: {
-        // userId: uid.split('uid-')[1],
-        // userUUID: uid,
-        // cursorName: `user-${uid}`,
         nickName: `nickName-${uid}`,
     },
     hotKeys: {
@@ -75,7 +68,7 @@ const room = await whiteWebSdk.joinRoom({
         changeToArrow: "a",
         changeToHand: "h",
     },
-    invisiblePlugins: [WindowManager as any, ApplianceMultiPlugin],
+    invisiblePlugins: [WindowManager as any],
     disableNewPencil: false,
     useMultiViews: true, 
 })
@@ -85,31 +78,60 @@ if (room.isWritable) {
 const manager = await WindowManager.mount({ room , container:elm, chessboard: true, cursor: true, supportAppliancePlugin: true});
 if (manager) {
     await manager.switchMainViewToWriter();
-    const fullWorkerBlob = new Blob([fullWorkerString], {type: 'text/javascript'});
-    const fullWorkerUrl = URL.createObjectURL(fullWorkerBlob);
-    const subWorkerBlob = new Blob([subWorkerString], {type: 'text/javascript'});
-    const subWorkerUrl = URL.createObjectURL(subWorkerBlob);
-    const plugin = await ApplianceMultiPlugin.getInstance(manager,
-        {   // 获取插件实例，全局应该只有一个插件实例，必须在 joinRoom 之后调用
-            options: {
-                cdn: {
-                    fullWorkerUrl,
-                    subWorkerUrl
-                }
-            }
-        }
-    );
     await WindowManager.register({
         kind: 'Quill',
-        src: () => import("../../src/index")
+        src: NetlessAppQuill as any,
+        appOptions: {
+            options: {
+                modules: {
+                    cursors: true,
+                    toolbar: [
+                      [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
+                      ["bold", "italic", "underline", "strike"],
+                      ["link", "formula"],
+                      ["clean"],
+                    ],
+                    history: {
+                      userOnly: true,
+                    },
+                },
+            },
+            uploadBase64Image: async (base64Image: string) => {
+                // base64Image 转 File
+                const base64Data = base64Image.replace(/^data:image\/(png|jpeg|jpg|gif|webp);base64,/, '');
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                
+                const byteArray = new Uint8Array(byteNumbers);
+                
+                // 从 base64 字符串中提取文件类型
+                const matches = base64Image.match(/^data:image\/(png|jpeg|jpg|gif|webp);base64,/);
+                const mimeType = matches ? `image/${matches[1]}` : 'image/png';
+                const fileExtension = mimeType.split('/')[1];
+                
+                // 创建 File 对象
+                const file = new File([byteArray], `uploaded-image-${Date.now()}.${fileExtension}`, {
+                    type: mimeType
+                });
+                
+                const url = await uploadImage(file);
+                return url;
+            }
+        }
     })
     room.disableSerialization = false;
-    window.appliancePlugin = plugin;
 }
 window.manager = manager;
 
 document.getElementById('addBtn')?.addEventListener('click', () => {
     manager.addApp({
         kind: 'Quill',
+        attributes: {
+            placeholder: 'custom placeholder'
+        },
     })
 });
