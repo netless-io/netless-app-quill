@@ -83,7 +83,20 @@ export class QuillEditor {
         e.stopPropagation();
 
         const clipboardData = e.clipboardData || (window as any).clipboardData;
+        
         const html = clipboardData.getData('text/html') || clipboardData.getData('text/plain');
+
+        if (!html) {
+          // 检查是否有图片文件
+          const files = Array.from(clipboardData.files || []) as File[];
+          const imageFiles = files.filter((file: File) => file.type.startsWith('image/'));
+          
+          if (imageFiles.length > 0) {
+            // 处理粘贴的图片文件
+            await this.handlePastedImageFiles(imageFiles);
+          }
+          return false;
+        }
       
         const processedHTML = await this.handleBase64ImagesInHTML(html);
 
@@ -178,6 +191,58 @@ export class QuillEditor {
     await Promise.all(uploadTasks);
     const result = div.innerHTML;
     return result;
+  }
+
+  private async handlePastedImageFiles(imageFiles: File[]): Promise<void> {
+    const uploadBase64Image = this.context.getAppOptions()?.uploadBase64Image;
+    
+    if (!uploadBase64Image) {
+      console.warn('uploadBase64Image is not set, cannot upload pasted images');
+      return;
+    }
+
+    const range = this.editor.getSelection(true);
+    if (!range) return;
+
+    // 为每个图片文件创建上传任务
+    const uploadTasks = imageFiles.map(async (file, index) => {
+      try {
+        // 将文件转换为 base64
+        const base64 = await this.fileToBase64(file);
+        
+        // 上传图片
+        const url = await uploadBase64Image(base64);
+        
+        // 插入图片到编辑器
+        const insertIndex = range.index + index;
+        this.editor.insertEmbed(insertIndex, 'image', url, 'user');
+        
+        // 如果不是最后一个图片，在图片后插入换行
+        if (index < imageFiles.length - 1) {
+          this.editor.insertText(insertIndex + 1, '\n', 'user');
+        }
+        
+      } catch (err) {
+        console.error('图片上传失败:', err);
+      }
+    });
+
+    await Promise.all(uploadTasks);
+    
+    // 设置光标到最后一个图片之后
+    const finalIndex = range.index + imageFiles.length;
+    this.editor.setSelection(finalIndex, 0);
+  }
+
+  private fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve(reader.result as string);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   async init(context: AppContext){
