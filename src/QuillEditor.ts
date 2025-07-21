@@ -130,6 +130,31 @@ export class QuillEditor {
         
         return false; // 确保事件不会继续传播
       }, true); // 使用 capture 阶段
+
+      // 添加 drop 事件处理，支持拖拽图片文件
+      this.editor.root.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, true);
+
+      this.editor.root.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const files = Array.from(e.dataTransfer?.files || []) as File[];
+        const imageFiles = files.filter((file: File) => file.type.startsWith('image/'));
+        
+        if (imageFiles.length > 0) {
+          // 计算拖拽位置对应的编辑器位置
+          const range = this.getDropRange(e);
+          if (range) {
+            await this.handleDroppedImageFiles(imageFiles, range);
+          }
+        }
+        
+        return false;
+      }, true);
+
       this.cursors = this.editor.getModule("cursors") as QuillCursors;
   
       this.yBinding = new QuillBinding(this.yText, this.editor);
@@ -243,6 +268,69 @@ export class QuillEditor {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  }
+
+  private getDropRange(e: DragEvent): { index: number; length: number } | null {
+    // 获取拖拽位置对应的编辑器位置
+    const rect = this.editor.root.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // 创建临时选区来获取位置
+    const range = document.createRange();
+    const selection = window.getSelection();
+    
+    // 尝试在拖拽位置创建选区
+    const element = document.elementFromPoint(e.clientX, e.clientY);
+    if (element && this.editor.root.contains(element)) {
+      // 如果拖拽位置在编辑器内，使用当前选区或文档末尾
+      const currentSelection = this.editor.getSelection();
+      if (currentSelection) {
+        return currentSelection;
+      }
+    }
+    
+    // 默认使用文档末尾
+    const length = this.editor.getLength();
+    return { index: length - 1, length: 0 };
+  }
+
+  private async handleDroppedImageFiles(imageFiles: File[], range: { index: number; length: number }): Promise<void> {
+    const uploadBase64Image = this.context.getAppOptions()?.uploadBase64Image;
+    
+    if (!uploadBase64Image) {
+      console.warn('uploadBase64Image is not set, cannot upload dropped images');
+      return;
+    }
+
+    // 为每个图片文件创建上传任务
+    const uploadTasks = imageFiles.map(async (file, index) => {
+      try {
+        // 将文件转换为 base64
+        const base64 = await this.fileToBase64(file);
+        
+        // 上传图片
+        const url = await uploadBase64Image(base64);
+        
+        // 插入图片到编辑器
+        const insertIndex = range.index + index;
+        this.editor.insertEmbed(insertIndex, 'image', url, 'user');
+        
+        // 如果不是最后一个图片，在图片后插入换行
+        if (index < imageFiles.length - 1) {
+          this.editor.insertText(insertIndex + 1, '\n', 'user');
+        }
+        
+      } catch (err) {
+        console.error('图片上传失败:', err);
+      }
+    });
+
+    await Promise.all(uploadTasks);
+    
+    // 设置光标到最后一个图片之后
+    const finalIndex = range.index + imageFiles.length;
+    this.editor.setSelection(finalIndex, 0);
   }
 
   async init(context: AppContext){
