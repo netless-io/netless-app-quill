@@ -55,7 +55,7 @@ export class QuillEditor {
       context.getBox().mountStyles(QuillEditor.styles);
       context.getBox().mountContent(this.$container);
 
-      const options = context.getAppOptions().options || {};
+      const options = context.getAppOptions()?.options || {};
 
       this.options = {
         ...DEFAULT_OPTIONS,
