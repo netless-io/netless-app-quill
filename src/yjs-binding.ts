@@ -82,8 +82,8 @@ export function createVector(context: AppContext, storage: Storage) {
 
 export interface ConnectOptions {
   /**
-   * Shrink vector size when it is bigger than this number.
-   * default: 1000
+   * Shrink vector size when it is bigger than this number.Affected by akko's 'illusion queue', the maximum cannot exceed 500
+   * default: 500
    */
   optimizeAt?: number;
 }
@@ -91,7 +91,7 @@ export interface ConnectOptions {
 export function connect(
   vector: Vector,
   doc: Y.Doc,
-  { optimizeAt = 1000 }: ConnectOptions = {}
+  { optimizeAt = 500 }: ConnectOptions = {}
 ) {
   if (optimizeAt <= 0) {
     throw new Error("[optimizeAt] must be greater than 0");

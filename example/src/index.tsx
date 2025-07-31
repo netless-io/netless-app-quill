@@ -45,8 +45,8 @@ const whiteWebSdk = new WhiteWebSdk({
 })
 const uid = sessionStorage.getItem('uid') || 'uid-' + Math.floor(Math.random() * 10000);
 const room = await whiteWebSdk.joinRoom({
-    uuid:"cbc67f00169f11f0826bfd782d7d3846",
-    roomToken:"NETLESSROOM_YWs9VWtNUk92M1JIN2I2Z284dCZleHBpcmVBdD0xNzUxOTU0OTk4NDgxJm5vbmNlPTAyOGZhNDEwLTVhZjktMTFmMC05NmE5LWFiMzg4NjE4OThhZiZyb2xlPTEmc2lnPTcyNDI1OTUxZWZiMzgwZDU4MDNiNjYyM2EyOGMzNGNiNWM5NDNhMjczZjI1OThhM2NlZjJkNTgyZDZiNTVkYmYmdXVpZD1jYmM2N2YwMDE2OWYxMWYwODI2YmZkNzgyZDdkMzg0Ng",
+    uuid:"1f47999065fe11f099f3f9fef0bf32e2",
+    roomToken:"NETLESSROOM_YWs9VWtNUk92M1JIN2I2Z284dCZleHBpcmVBdD0xNzUzMTY2NjU3MTE0Jm5vbmNlPTFmNjI5YmEwLTY1ZmUtMTFmMC05NmE5LWFiMzg4NjE4OThhZiZyb2xlPTEmc2lnPTdkMTUwYzBlYjRiNDZhNjY0M2Y2MzIyMDFmZGYxODlmN2I1NjI2NTEzMmQwYzFjMWRhOTMzNjUwNDgyN2NmNjYmdXVpZD0xZjQ3OTk5MDY1ZmUxMWYwOTlmM2Y5ZmVmMGJmMzJlMg",
     uid,
     region: "cn-hz",
     isWritable: true,
@@ -78,6 +78,7 @@ if (room.isWritable) {
 const manager = await WindowManager.mount({ room , container:elm, chessboard: true, cursor: true, supportAppliancePlugin: true});
 if (manager) {
     await manager.switchMainViewToWriter();
+    // register quill app
     await WindowManager.register({
         kind: 'Quill',
         src: NetlessAppQuill as any,
@@ -86,9 +87,6 @@ if (manager) {
                 modules: {
                     cursors: true,
                     toolbar: [
-                      [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
-                      ["bold", "italic", "underline", "strike"],
-                      ["link", "formula"],
                       ["clean"],
                     ],
                     history: {
@@ -123,15 +121,50 @@ if (manager) {
             }
         }
     })
+
     room.disableSerialization = false;
 }
 window.manager = manager;
+
+const dataTransferQuillMap:Map<string, any> = new Map();
+
+manager.emitter.on("onAppSetup", async (appId)=>{
+    const map = manager.appManager?.appProxies || new Map();
+    const app = map.get(appId);
+    if (app && app.kind === "Quill") {
+        if (dataTransferQuillMap.has(appId)) {
+            const delta = dataTransferQuillMap.get(appId);
+            if (delta) {
+                app.appResult.editor.setContents(delta);
+                dataTransferQuillMap.delete(appId);
+            }
+            return;
+        }
+        const storage = app.appResult.storage$$.state;
+        if (Object.keys(storage).length > 700) {
+            const sourceQuill = app.appResult.editor;
+            const delta = sourceQuill.getContents();
+            // allocation according to the demands of the Quill app
+            const newAppId = await manager.addApp({
+                kind: 'Quill',
+                attributes: {
+                  placeholder: 'custom placeholder'
+                }
+            });
+            if (newAppId) {
+                dataTransferQuillMap.set(newAppId, delta);
+                manager.closeApp(appId);
+            }
+        }
+    }
+})
+
 
 document.getElementById('addBtn')?.addEventListener('click', () => {
     manager.addApp({
         kind: 'Quill',
         attributes: {
-            placeholder: 'custom placeholder'
+            placeholder: 'custom asdakdadasdj'
         },
     })
 });
