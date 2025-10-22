@@ -2,7 +2,7 @@
 import '@netless/window-manager/dist/style.css';
 import './index.css';
 import '@netless/appliance-plugin/dist/style.css';
-import { WhiteWebSdk, DeviceType, DefaultHotKeys, HotKeyEvent, KeyboardKind} from "white-web-sdk";
+import { WhiteWebSdk, DeviceType, DefaultHotKeys, HotKeyEvent, KeyboardKind, Logger} from "white-web-sdk";
 import { WindowManager } from "@netless/window-manager";
 import { NetlessAppQuill } from "../../src/app-quill";
 import { uploadImage } from './uploadImage';
@@ -126,17 +126,28 @@ if (manager) {
 }
 window.manager = manager;
 
-const dataTransferQuillMap:Map<string, any> = new Map();
 
+
+
+
+
+
+window.dataTransferQuillMap = new Map();
+// fastboard is an instance object of createFastboard
+const manager = fastboard.manager;
 manager.emitter.on("onAppSetup", async (appId)=>{
     const map = manager.appManager?.appProxies || new Map();
     const app = map.get(appId);
     if (app && app.kind === "Quill") {
-        if (dataTransferQuillMap.has(appId)) {
-            const delta = dataTransferQuillMap.get(appId);
-            if (delta) {
+        if (window.dataTransferQuillMap.has(appId)) {
+            const data = window.dataTransferQuillMap.get(appId);
+            if (data) {
+                const {delta, oldAppId} = data;
                 app.appResult.editor.setContents(delta);
-                dataTransferQuillMap.delete(appId);
+                ((manager.room as any).logger as Logger).info(`[Quill transfer] transfer success ${appId}`);
+                await manager.closeApp(oldAppId);
+                ((manager.room as any).logger as Logger).info(`[Quill transfer] old app has closed ${oldAppId}`);
+                window.dataTransferQuillMap.delete(appId);
             }
             return;
         }
@@ -145,15 +156,19 @@ manager.emitter.on("onAppSetup", async (appId)=>{
             const sourceQuill = app.appResult.editor;
             const delta = sourceQuill.getContents();
             // allocation according to the demands of the Quill app
-            const newAppId = await manager.addApp({
+            const options = {
                 kind: 'Quill',
                 attributes: {
                   placeholder: 'custom placeholder'
                 }
-            });
+            }
+            const newAppId = await manager.addApp(options);
             if (newAppId) {
-                dataTransferQuillMap.set(newAppId, delta);
-                manager.closeApp(appId);
+                ((manager.room as any).logger as Logger).info(`[Quill transfer] add new app ${newAppId}: ${JSON.stringify(options)}`);
+                window.dataTransferQuillMap.set(newAppId, {
+                    delta,
+                    oldAppId: appId,
+                });
             }
         }
     }

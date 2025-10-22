@@ -9,6 +9,7 @@ declare global {
       appliancePlugin: any;
       manager: any;
       clipboardData: any;
+      dataTransferQuillMap: Map<string, any>;
       getSelection(): Selection;
     }
 }

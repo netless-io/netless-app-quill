@@ -1,5 +1,8 @@
 import type { QuillOptions } from "quill";
 
+declare let __VERSION__: string;
+export const pkg_version = __VERSION__;
+
 export const DEFAULT_OPTIONS: QuillOptions = {
     modules: {
       cursors: true,
